@@ -1,3 +1,7 @@
 cmake-build-debug/
 .idea/*
 *.tmp
+.cproject
+.project
+.mxproject
+/Debug/
