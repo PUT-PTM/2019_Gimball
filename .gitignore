@@ -5,3 +5,4 @@ cmake-build-debug/
 .project
 .mxproject
 /Debug/
+/raw_mpu.tsc
