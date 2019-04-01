@@ -33,59 +33,59 @@ uint8_t mpu6050_rbuff[6];
 
 
 
-void mpu6050_read(I2C_HandleTypeDef* hi2c1, unsigned char add, unsigned char n)     //doc n byte bt dau tu dia chi add, luu vao rbuff
+void mpu6050_read(unsigned char add, unsigned char n)     //doc n byte bt dau tu dia chi add, luu vao rbuff
 {		*mpu6050_tbuff=add;
 //    HAL_I2C_Master_Transmit(&hi2c1,0xD0,mpu6050_tbuff,1,1);
  //   HAL_I2C_Master_Receive(&hi2c1,0xD0,mpu6050_rbuff,n,1);
-		HAL_I2C_Mem_Read(hi2c1, 0xD0, add,I2C_MEMADD_SIZE_8BIT, mpu6050_rbuff, n, 1000);
+		HAL_I2C_Mem_Read(&hi2c1, 0xD0, add,I2C_MEMADD_SIZE_8BIT, mpu6050_rbuff, n, 1000);
 }  
-void mpu6050_getgyro(I2C_HandleTypeDef* hi2c1)					 //doc du lieu gyro 16bit, ghi vao rbuff
+void mpu6050_getgyro()					 //doc du lieu gyro 16bit, ghi vao rbuff
 {   
-    mpu6050_read(hi2c1,0x43,6);
+    mpu6050_read(0x43,6);
     *mpu6050_g=((*mpu6050_rbuff)<<8)+*(mpu6050_rbuff+1); 							
     *(mpu6050_g+1)=(*(mpu6050_rbuff+2)<<8)+*(mpu6050_rbuff+3);
     *(mpu6050_g+2)=(*(mpu6050_rbuff+4)<<8)+*(mpu6050_rbuff+5);
 }
-void mpu6050_getgyrodata(I2C_HandleTypeDef* hi2c1)				//doc du lieu gyro, don vi: rad/giay, ghi vao mang mpu6050_gf
+void mpu6050_getgyrodata()				//doc du lieu gyro, don vi: rad/giay, ghi vao mang mpu6050_gf
 	{	//3.2768
-		mpu6050_getgyro(hi2c1);
+		mpu6050_getgyro();
 		*mpu6050_gf=*mpu6050_g/939.65;
 		*(mpu6050_gf+1)=*(mpu6050_g+1)/939.65;
 		*(mpu6050_gf+2)=*(mpu6050_g+2)/939.65;
 
 	}
-void mpu6050_getaccel(I2C_HandleTypeDef* hi2c1)					//doc du lieu accel 16bit, ghi vao mang mpu6050_a
+void mpu6050_getaccel()					//doc du lieu accel 16bit, ghi vao mang mpu6050_a
 {   
-    mpu6050_read(hi2c1,0x3b,6);
+    mpu6050_read(0x3b,6);
     *mpu6050_a=((*mpu6050_rbuff)<<8)+*(mpu6050_rbuff+1)-260; 
     *(mpu6050_a+1)=(*(mpu6050_rbuff+2)<<8)+*(mpu6050_rbuff+3);
     *(mpu6050_a+2)=(*(mpu6050_rbuff+4)<<8)+*(mpu6050_rbuff+5);
 }
-void mpu6050_getacceldata(I2C_HandleTypeDef* hi2c1)				//doc du lieu accel, don vi:g, ghi vao mang mpu6050_af
+void mpu6050_getacceldata()				//doc du lieu accel, don vi:g, ghi vao mang mpu6050_af
 	{//409.60
-		mpu6050_getaccel(hi2c1);
+		mpu6050_getaccel();
 		*mpu6050_af=*mpu6050_a/8192.0;
 		*(mpu6050_af+1)=*(mpu6050_a+1)/8192.0;
 		*(mpu6050_af+2)=*(mpu6050_a+2)/8192.0;
 	}
-void mpu6050_write(I2C_HandleTypeDef* hi2c1, unsigned char add,unsigned char data)	//ham ghi 1 byte vao dia chi add
+void mpu6050_write(unsigned char add,unsigned char data)	//ham ghi 1 byte vao dia chi add
 {	
 	*mpu6050_tbuff=add;
 	*(mpu6050_tbuff+1)=data;
-	HAL_I2C_Master_Transmit(hi2c1,0xD0,mpu6050_tbuff,2,1);
+	HAL_I2C_Master_Transmit(&hi2c1,0xD0,mpu6050_tbuff,2,1);
 //	HAL_I2C_Mem_Write(&hi2c1, 0x68, address, I2C_MEMADD_SIZE_8BIT, &data, 1, 1);
 }
-int mpu6050_getdata(I2C_HandleTypeDef* hi2c1, unsigned char add)			//doc 2 byte tu dia chi add
+int mpu6050_getdata(unsigned char add)			//doc 2 byte tu dia chi add
 {
-   mpu6050_read(hi2c1, add, 2);
+   mpu6050_read(add, 2);
 
    return ((*mpu6050_rbuff)<<8)+*(mpu6050_rbuff+1);   
 }
-void mpu6050_init(I2C_HandleTypeDef* hi2c1)
+void mpu6050_init(void)
 {
-   mpu6050_write(hi2c1, PWR_MGMT_1, 0x00);  // internal 8MHz, disabled SLEEP mode, disable CYCLE mode
-   mpu6050_write(hi2c1, SMPLRT_DIV, 0x03);	 //sample rate: 8khz
-   mpu6050_write(hi2c1, CONFIG, 0x06);		 //DLPF disable
-   mpu6050_write(hi2c1, GYRO_CONFIG, 0x10);  //full scale range mode 2 +-1000do/s
-   mpu6050_write(hi2c1, ACCEL_CONFIG, 0x10); //full scale range mode 2 +-8g
+   mpu6050_write(PWR_MGMT_1, 0x00);  // internal 8MHz, disabled SLEEP mode, disable CYCLE mode  
+   mpu6050_write(SMPLRT_DIV, 0x03);	 //sample rate: 8khz
+   mpu6050_write(CONFIG, 0x06);		 //DLPF disable
+   mpu6050_write(GYRO_CONFIG, 0x10);  //full scale range mode 2 +-1000do/s
+   mpu6050_write(ACCEL_CONFIG, 0x10); //full scale range mode 2 +-8g
 }
