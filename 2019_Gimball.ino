@@ -55,7 +55,6 @@ THE SOFTWARE.
     #include "Wire.h"
 #endif
 
-#include <Servo.h>
 
 // class default I2C address is 0x68
 // specific I2C addresses may be passed as a parameter here
@@ -108,7 +107,18 @@ float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gra
 // packet structure for InvenSense teapot demo
 uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
 
+// motors
+int STBY = 5; //standby
 
+//Motor A
+int PWMA = 2; //Speed control
+int AIN1 = 4; //Direction
+int AIN2 = 3; //Direction
+
+//Motor B
+int PWMB = 8; //Speed control
+int BIN1 = 6; //Direction
+int BIN2 = 7; //Direction
 
 // ================================================================
 // ===               INTERRUPT DETECTION ROUTINE                ===
@@ -230,6 +240,17 @@ void setup() {
 
     right_prop.attach(3); //attatch the right motor to pin 3
     left_prop.attach(5);  //attatch the left motor to pin 5
+	
+	// motors
+	pinMode(STBY, OUTPUT);
+
+	pinMode(PWMA, OUTPUT);
+	pinMode(AIN1, OUTPUT);
+	pinMode(AIN2, OUTPUT);
+
+	pinMode(PWMB, OUTPUT);
+	pinMode(BIN1, OUTPUT);
+	pinMode(BIN2, OUTPUT);
 
     // configure LED for output
     pinMode(LED_BUILTIN,OUTPUT);
@@ -348,8 +369,43 @@ void loop() {
           pwmLeft=2000;
         }
 
+
+		// TODO
+		// convert pid to motor values
         left_prop.writeMicroseconds(pwmLeft);
         right_prop.writeMicroseconds(pwmRight);
         previous_error = error; //Remember to store the previous error.
     }
+}
+
+void move(int motor, int speed, int direction){
+  //Move specific motor at speed and direction
+  //motor: 0 for B 1 for A
+  //speed: 0 is off, and 255 is full speed
+  //direction: 0 clockwise, 1 counter-clockwise
+  
+  digitalWrite(STBY, HIGH); //disable standby
+  
+  boolean inPin1 = LOW;
+  boolean inPin2 = HIGH;
+  
+  if(direction == 1){
+  inPin1 = HIGH;
+  inPin2 = LOW;
+  }
+  
+  if(motor == 1){
+  digitalWrite(AIN1, inPin1);
+  digitalWrite(AIN2, inPin2);
+  analogWrite(PWMA, speed);
+  }else{
+  digitalWrite(BIN1, inPin1);
+  digitalWrite(BIN2, inPin2);
+  analogWrite(PWMB, speed);
+  }
+}
+
+void stop(){
+  //enable standby
+  digitalWrite(STBY, LOW);
 }
