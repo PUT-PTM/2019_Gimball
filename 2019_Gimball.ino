@@ -1,20 +1,44 @@
 HardwareSerial Serial1(PA10, PA9);
 const int led=2;
+int dc_step = 10;
 int speedP=0;
 int speedL=0;
-int direction=5;
 
+
+int STBY = 9;
+int direction =5;
 //Motor A
-int PWMA = 3; //Speed control
-int AIN1 = 9; //Direction
-int AIN2 = 8; //Direction
+int PWMA = 6; //Speed control
+int AIN1 = 8; //Direction
+int AIN2 = 7; //Direction
 
 //Motor B
-int PWMB = 5; //Speed control
-int BIN1 = 11; //Direction
-int BIN2 = 12; //Direction
+int PWMB = 12; //Speed control
+int BIN1 = 10; //Direction
+int BIN2 = 11; //Direction
 
+
+void led_blink(){
+  digitalWrite(LED_BUILTIN,HIGH);
+  delay(200);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(200);
+}
 void setup() {
+  pinMode(LED_BUILTIN,OUTPUT);
+  digitalWrite(LED_BUILTIN,HIGH);
+  delay(200);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(200);
+  digitalWrite(LED_BUILTIN,HIGH);
+  delay(200);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(200);
+  digitalWrite(LED_BUILTIN,HIGH);
+  delay(200);
+  digitalWrite(LED_BUILTIN, LOW);
+
+  
   Serial.begin(9600); //ST-LINK Virtual COM Port
   Serial1.begin(9600); // UART1
 
@@ -28,7 +52,32 @@ void setup() {
   pinMode(BIN1, OUTPUT);
   pinMode(BIN2, OUTPUT);
   
-  pinMode(LED_BUILTIN,OUTPUT);
+  bool inPin1 = HIGH;
+  bool inPin2 = LOW;
+
+  digitalWrite(STBY, HIGH);
+  
+  int speedtest = 100;
+  digitalWrite(AIN1, inPin1);
+  digitalWrite(AIN2, inPin2);
+  analogWrite(PWMA, speedtest);
+  digitalWrite(BIN1, inPin1);
+  digitalWrite(BIN2, inPin2);
+  analogWrite(PWMB, speedtest);
+  delay(1000);
+  digitalWrite(STBY, LOW);
+
+  digitalWrite(LED_BUILTIN,HIGH);
+  delay(200);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(200);
+  digitalWrite(LED_BUILTIN,HIGH);
+  delay(200);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(200);
+  digitalWrite(LED_BUILTIN,HIGH);
+  delay(200);
+  digitalWrite(LED_BUILTIN, LOW);
 
 }
 
@@ -37,18 +86,18 @@ void loop() {
   {
     char a=Serial1.read();
     if(a=='1'){
-      speedP=speedP+10;
-      speedL=speedL+10;
+      speedP=speedP+dc_step;
+      speedL=speedL+dc_step;
     }
     else if(a=='2'){
-      speedP=speedP-10;
-      speedL=speedL-10;      
+      speedP=speedP-dc_step;
+      speedL=speedL-dc_step;      
     }
     else if(a=='3'){
-      speedP=speedP+10;
+      speedP=speedP+dc_step;
     }
     else if(a=='4'){
-      speedL=speedL+10;
+      speedL=speedL+dc_step;
     }
     else if(a=='5'){
      speedP=speedL;
@@ -63,8 +112,9 @@ void loop() {
       digitalWrite(LED_BUILTIN, LOW);
     }
   }
-  move(1,speedP);
-  move(2,speedL);
+  move(1,speedL);
+  move(2,speedP);
+  stop();
 }
 
 void move(int motor, int speed){
@@ -73,9 +123,10 @@ void move(int motor, int speed){
   //speed: 0 is off, and 255 is full speed
   //direction: 0 clockwise, 1 counter-clockwise
   digitalWrite(STBY, HIGH); //disable standby
-
+  
   boolean inPin1 = LOW;
   boolean inPin2 = HIGH;
+  if(speed != 0) speed=(int)(speed*0.8) + 50;
   
   if(speed>0){
     direction=1;
@@ -96,4 +147,8 @@ void move(int motor, int speed){
     analogWrite(PWMB, speed);
   }
 
+}
+void stop(){
+  //enable standby
+  digitalWrite(STBY, LOW);
 }
