@@ -87,6 +87,7 @@ MPU6050 mpu;
 #define INTERRUPT_PIN 2 // use pin 2 on Arduino Uno & most boards
 #define LED_PIN 13      // (Arduino is 13, Teensy is 11, Teensy++ is 6)
 bool blinkState = false;
+bool debug = false;
 
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
@@ -131,7 +132,6 @@ HardwareSerial Serial1(PA10, PA9);
 
 // variables for pid calculations
 float elapsedTime, time, timePrev;
-// int i;
 float rad_to_deg = 180 / 3.141592654;
 
 float PIDvalue, error, previous_error;
@@ -139,16 +139,13 @@ float pid_p = 0;
 float pid_i = 0;
 float pid_d = 0;
 
-char type;
-String bt;
-
 /////////////////PID CONSTANTS/////////////////
-double kp = 120.0;
-double ki = 0.1;
-double kd = 2.0;
+double kp = 750.0;
+double ki = 1.0;
+double kd = 0.5;
 ///////////////////////////////////////////////
 
-float desired_angle = -0.005; //This is the angle in which we whant the balance to stay steady
+float desired_angle = 0.015; //This is the angle in which we want the balance to stay steady
 
 // ================================================================
 // ===               INTERRUPT DETECTION ROUTINE                ===
@@ -192,7 +189,7 @@ void move(int motor, float speed)
     //motor: 0 for B 1 for A
     //speed: 0 is off, and 255 is full speed
     //direction: 0 clockwise, 1 counter-clockwise
-    digitalWrite(STBY, HIGH); //disable standby
+    //digitalWrite(STBY, HIGH); //disable standby
 
     if (speed > 0.0)
     {
@@ -220,10 +217,17 @@ void move(int motor, float speed)
     }
 }
 
+void start()
+{
+    //enable standby
+    digitalWrite(STBY, HIGH);
+}
+
 void stop()
 {
     //enable standby
     digitalWrite(STBY, LOW);
+    led_blink(10, 250);
 }
 
 // ================================================================
@@ -246,6 +250,16 @@ void setup()
     // initialize serial communication
     Serial.begin(9600);  //ST-LINK Virtual COM Port
     Serial1.begin(9600); // UART1
+
+    if (Serial.available())
+    {
+        // debug mode
+        debug = true;
+        while (1)
+        {
+            led_blink(1, 250);
+        }
+    }
 
     // NOTE: 8MHz or slower host processors, like the Teensy @ 3.3V or Arduino
     // Pro Mini running at 3.3V, cannot handle this baud rate reliably due to
@@ -353,6 +367,7 @@ void setup()
     Serial.println(F("Test finished"));
 
     led_blink(1, 1000, 0);
+    start();
 }
 
 void loop()
@@ -421,39 +436,38 @@ void loop()
         blinkState = !blinkState;
         digitalWrite(LED_PIN, blinkState);
 
+        // check verticality
+        if (abs(ypr[2]) > 60.0)
+        {
+            stop();
+        }
+
         // calculate pid
         timePrev = time; // the previous time is stored before the actual time read
         time = millis(); // actual time read
         elapsedTime = (time - timePrev) / 1000;
 
-        if (abs(ypr[2]) < 55.0)
+        error = ypr[2] - desired_angle;
+        pid_p = kp * error;
+        if (-3.0 < error && error < 3.0)
         {
-            error = ypr[2] - desired_angle;
-            pid_p = kp * error;
-            if (-3.0 < error && error < 3.0)
-            {
-                pid_i = pid_i + (ki * error);
-            }
-            pid_d = kd * ((error - previous_error) / elapsedTime);
-
-            PIDvalue = pid_p + pid_i + pid_d;
-
-            if (PIDvalue < -255)
-            {
-                PIDvalue = -255;
-            }
-            if (PIDvalue > 255)
-            {
-                PIDvalue = 255;
-            }
-
-            move(1, PIDvalue);
-            move(2, PIDvalue);
+            pid_i = pid_i + (ki * error);
         }
-        else
+        pid_d = kd * ((error - previous_error) / elapsedTime);
+
+        PIDvalue = pid_p + pid_i + pid_d;
+
+        if (PIDvalue < -255)
         {
-            stop();
+            PIDvalue = -255;
         }
+        if (PIDvalue > 255)
+        {
+            PIDvalue = 255;
+        }
+
+        move(1, PIDvalue);
+        move(2, PIDvalue);
 
         // if (Serial1.available())
         // {
@@ -468,22 +482,22 @@ void loop()
         //         kd = b.toFloat();
         // }
 
-        // Serial1.print("ypr\t");
-        // Serial1.print(ypr[0] * 180 / 3.14);
-        // Serial1.print("\t");
-        // Serial1.print(ypr[1] * 180 / 3.14);
-        // Serial1.print("\t");
-        // Serial1.print(ypr[2] * 180 / 3.14);
-        // Serial1.print("\t");
-        // Serial1.print(kp);
-        // Serial1.print("\t");
-        // Serial1.print(ki);
-        // Serial1.print("\t");
-        // Serial1.print(kd);
-        // Serial1.print("\t");
-        // Serial1.print(F("PID "));
-        // Serial1.print(PIDvalue);
-        // Serial1.println(F(")"));
+        // Serial.print("ypr\t");
+        // Serial.print(ypr[0] * 180 / 3.14);
+        // Serial.print("\t");
+        // Serial.print(ypr[1] * 180 / 3.14);
+        // Serial.print("\t");
+        // Serial.print(ypr[2] * 180 / 3.14);
+        // Serial.print("\t");
+        // Serial.print(kp);
+        // Serial.print("\t");
+        // Serial.print(ki);
+        // Serial.print("\t");
+        // Serial.print(kd);
+        // Serial.print("\t");
+        // Serial.print(F("PID "));
+        // Serial.print(PIDvalue);
+        // Serial.println(F(")"));
 
         previous_error = error; //Remember to store the previous error.
     }
