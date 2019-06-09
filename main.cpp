@@ -141,11 +141,11 @@ float pid_d = 0;
 
 /////////////////PID CONSTANTS/////////////////
 double kp = 750.0;
-double ki = 1.0;
+double ki = 0.1;
 double kd = 0.5;
 ///////////////////////////////////////////////
 
-float desired_angle = 0.015; //This is the angle in which we want the balance to stay steady
+float desired_angle = 0.007; //This is the angle in which we want the balance to stay steady
 
 // ================================================================
 // ===               INTERRUPT DETECTION ROUTINE                ===
@@ -227,7 +227,8 @@ void stop()
 {
     //enable standby
     digitalWrite(STBY, LOW);
-    led_blink(10, 250);
+    while (1)
+        led_blink(1, 250);
 }
 
 // ================================================================
@@ -248,18 +249,8 @@ void setup()
     pinMode(LED_PIN, OUTPUT);
 
     // initialize serial communication
-    Serial.begin(9600);  //ST-LINK Virtual COM Port
-    Serial1.begin(9600); // UART1
-
-    if (Serial.available())
-    {
-        // debug mode
-        debug = true;
-        while (1)
-        {
-            led_blink(1, 250);
-        }
-    }
+    Serial.begin(9600); //ST-LINK Virtual COM Port
+    //Serial1.begin(9600); // UART1
 
     // NOTE: 8MHz or slower host processors, like the Teensy @ 3.3V or Arduino
     // Pro Mini running at 3.3V, cannot handle this baud rate reliably due to
@@ -296,10 +287,12 @@ void setup()
     devStatus = mpu.dmpInitialize();
 
     // supply your own gyro offsets here, scaled for min sensitivity
-    mpu.setXGyroOffset(5);
-    mpu.setYGyroOffset(-42);
-    mpu.setZGyroOffset(13);
-    mpu.setZAccelOffset(1125);
+    mpu.setXAccelOffset(-675);
+    mpu.setYAccelOffset(771);
+    mpu.setZAccelOffset(1144);
+    mpu.setXGyroOffset(1);
+    mpu.setYGyroOffset(-43);
+    mpu.setZGyroOffset(32);
 
     // make sure it worked (returns 0 if so)
     if (devStatus == 0)
@@ -460,10 +453,12 @@ void loop()
         if (PIDvalue < -255)
         {
             PIDvalue = -255;
+            stop();
         }
         if (PIDvalue > 255)
         {
             PIDvalue = 255;
+            stop();
         }
 
         move(1, PIDvalue);
