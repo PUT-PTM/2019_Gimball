@@ -42,19 +42,20 @@ THE SOFTWARE.
 ===============================================
 */
 
+#include <Arduino.h>
+
 // I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
 // for both classes must be in the include path of your project
-#include "I2Cdev.h"
+#include "../lib/I2Cdev/I2Cdev.h"
 
-#include "MPU6050_6Axis_MotionApps20.h"
+#include "../lib/MPU6050/MPU6050_6Axis_MotionApps20.h"
 //#include "MPU6050.h" // not necessary if using MotionApps include file
 
 // Arduino Wire library is required if I2Cdev I2CDEV_ARDUINO_WIRE implementation
 // is used in I2Cdev.h
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-    #include "Wire.h"
+#include "Wire.h"
 #endif
-
 
 // class default I2C address is 0x68
 // specific I2C addresses may be passed as a parameter here
@@ -83,8 +84,8 @@ MPU6050 mpu;
 
 #define OUTPUT_READABLE_YAWPITCHROLL
 
-#define INTERRUPT_PIN 2  // use pin 2 on Arduino Uno & most boards
-#define LED_PIN 13 // (Arduino is 13, Teensy is 11, Teensy++ is 6)
+#define INTERRUPT_PIN 2 // use pin 2 on Arduino Uno & most boards
+#define LED_PIN 13      // (Arduino is 13, Teensy is 11, Teensy++ is 6)
 bool blinkState = false;
 
 // MPU control/status vars
@@ -96,81 +97,155 @@ uint16_t fifoCount;     // count of all bytes currently in FIFO
 uint8_t fifoBuffer[64]; // FIFO storage buffer
 
 // orientation/motion vars
-Quaternion q;           // [w, x, y, z]         quaternion container
-VectorInt16 aa;         // [x, y, z]            accel sensor measurements
-VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
-VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
-VectorFloat gravity;    // [x, y, z]            gravity vector
-float euler[3];         // [psi, theta, phi]    Euler angle container
-float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
+Quaternion q;        // [w, x, y, z]         quaternion container
+VectorInt16 aa;      // [x, y, z]            accel sensor measurements
+VectorInt16 aaReal;  // [x, y, z]            gravity-free accel sensor measurements
+VectorInt16 aaWorld; // [x, y, z]            world-frame accel sensor measurements
+VectorFloat gravity; // [x, y, z]            gravity vector
+float euler[3];      // [psi, theta, phi]    Euler angle container
+float ypr[3];        // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
 // packet structure for InvenSense teapot demo
-uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
+uint8_t teapotPacket[14] = {'$', 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0x00, 0x00, '\r', '\n'};
 
-// motors
-int STBY = 5; //standby
+// define motors pins
+#define STBY 9
 
-//Motor A
-int PWMA = 2; //Speed control
-int AIN1 = 4; //Direction
-int AIN2 = 3; //Direction
+#define PWMA 6 //Speed control
+#define AIN1 8 //Direction
+#define AIN2 7 //Direction
 
-//Motor B
-int PWMB = 8; //Speed control
-int BIN1 = 6; //Direction
-int BIN2 = 7; //Direction
+#define PWMB 12 //Speed control
+#define BIN1 10 //Direction
+#define BIN2 11 //Direction
 
-// ================================================================
-// ===               INTERRUPT DETECTION ROUTINE                ===
-// ================================================================
+#define MOTOR_STEP 10
 
-volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
-void dmpDataReady() {
-    mpuInterrupt = true;
-}
+int speedP = 0;
+int speedL = 0;
+bool inPin1 = 0x0;
+bool inPin2 = 0x0;
 
 // ports for UART1
 HardwareSerial Serial1(PA10, PA9);
 
 // variables for pid calculations
 float elapsedTime, time, timePrev;
-int i;
-float rad_to_deg = 180/3.141592654;
+// int i;
+float rad_to_deg = 180 / 3.141592654;
 
-float PID, pwmLeft, pwmRight, error, previous_error;
-float pid_p=0;
-float pid_i=0;
-float pid_d=0;
+float PIDvalue, error, previous_error;
+float pid_p = 0;
+float pid_i = 0;
+float pid_d = 0;
+
+char type;
+String bt;
+
 /////////////////PID CONSTANTS/////////////////
-double kp=1.0;
-double ki=1.0;
-double kd=1.0;
+double kp = 120.0;
+double ki = 0.1;
+double kd = 2.0;
 ///////////////////////////////////////////////
 
-double throttle=1300; //initial value of throttle to the motors
-float desired_angle = 0; //This is the angle in which we whant the balance to stay steady
+float desired_angle = -0.005; //This is the angle in which we whant the balance to stay steady
 
-Servo right_prop;
-Servo left_prop;
+// ================================================================
+// ===               INTERRUPT DETECTION ROUTINE                ===
+// ================================================================
+
+volatile bool mpuInterrupt = false; // indicates whether MPU interrupt pin has gone high
+void dmpDataReady()
+{
+    mpuInterrupt = true;
+}
+
+// ================================================================
+// ===                        FUNCTIONS                         ===
+// ================================================================
+
+void led_blink(int times, int duration)
+{
+    for (int i = 0; i < times; i++)
+    {
+        digitalWrite(LED_PIN, HIGH);
+        delay(duration);
+        digitalWrite(LED_PIN, LOW);
+        delay(duration);
+    }
+}
+
+void led_blink(int times, int duration, int duration_off)
+{
+    for (int i = 0; i < times; i++)
+    {
+        digitalWrite(LED_PIN, HIGH);
+        delay(duration);
+        digitalWrite(LED_PIN, LOW);
+        delay(duration_off);
+    }
+}
+
+void move(int motor, float speed)
+{
+    //Move specific motor at speed and direction
+    //motor: 0 for B 1 for A
+    //speed: 0 is off, and 255 is full speed
+    //direction: 0 clockwise, 1 counter-clockwise
+    digitalWrite(STBY, HIGH); //disable standby
+
+    if (speed > 0.0)
+    {
+        inPin1 = HIGH;
+        inPin2 = LOW;
+        speed = (speed * 0.8) + 50;
+    }
+    else if (speed < 0.0)
+    {
+        inPin1 = LOW;
+        inPin2 = HIGH;
+        speed = ((speed * 0.8) - 50) * (-1);
+    }
+    if (motor == 1)
+    {
+        digitalWrite(AIN1, inPin1);
+        digitalWrite(AIN2, inPin2);
+        analogWrite(PWMA, (int)speed);
+    }
+    else
+    {
+        digitalWrite(BIN1, inPin1);
+        digitalWrite(BIN2, inPin2);
+        analogWrite(PWMB, (int)speed);
+    }
+}
+
+void stop()
+{
+    //enable standby
+    digitalWrite(STBY, LOW);
+}
 
 // ================================================================
 // ===                      INITIAL SETUP                       ===
 // ================================================================
 
-void setup() {
-    // join I2C bus (I2Cdev library doesn't do this automatically)
-    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-        Wire.begin();
-        Wire.setClock(400000); // 400kHz I2C clock. Comment this line if having compilation difficulties
-    #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
-        Fastwire::setup(400, true);
-    #endif
+void setup()
+{
+// join I2C bus (I2Cdev library doesn't do this automatically)
+#if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
+    Wire.begin();
+    Wire.setClock(400000); // 400kHz I2C clock. Comment this line if having compilation difficulties
+#elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
+    Fastwire::setup(400, true);
+#endif
+
+    // define led pinout
+    pinMode(LED_PIN, OUTPUT);
 
     // initialize serial communication
-    // (115200 chosen because it is required for Teapot Demo output, but it's
-    // really up to you depending on your project)
-    Serial.begin(38400);
-    while (!Serial); // wait for Leonardo enumeration, others continue immediately
+    Serial.begin(9600);  //ST-LINK Virtual COM Port
+    Serial1.begin(9600); // UART1
 
     // NOTE: 8MHz or slower host processors, like the Teensy @ 3.3V or Arduino
     // Pro Mini running at 3.3V, cannot handle this baud rate reliably due to
@@ -185,7 +260,16 @@ void setup() {
 
     // verify connection
     Serial.println(F("Testing device connections..."));
-    Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
+    if (mpu.testConnection())
+    {
+        Serial.println(F("MPU6050 connection successful"));
+        led_blink(1, 100);
+    }
+    else
+    {
+        Serial.println(F("MPU6050 connection failed"));
+        led_blink(2, 100, 250);
+    }
 
     // wait for ready
     //Serial.println(F("\nSend any character to begin DMP programming and demo: "));
@@ -204,7 +288,8 @@ void setup() {
     mpu.setZAccelOffset(1125);
 
     // make sure it worked (returns 0 if so)
-    if (devStatus == 0) {
+    if (devStatus == 0)
+    {
         // turn on the DMP, now that it's ready
         Serial.println(F("Enabling DMP..."));
         mpu.setDMPEnabled(true);
@@ -222,7 +307,11 @@ void setup() {
 
         // get expected DMP packet size for later comparison
         packetSize = mpu.dmpGetFIFOPacketSize();
-    } else {
+
+        led_blink(1, 100);
+    }
+    else
+    {
         // ERROR!
         // 1 = initial memory load failed
         // 2 = DMP configuration updates failed
@@ -230,43 +319,57 @@ void setup() {
         Serial.print(F("DMP Initialization failed (code "));
         Serial.print(devStatus);
         Serial.println(F(")"));
+        led_blink(4, 50);
+        led_blink(1, 50, 250);
     }
-
-    // bluetooth
-    Serial1.begin(9600); // UART1
 
     // pid
     time = millis(); //Start counting time in milliseconds
 
-    right_prop.attach(3); //attatch the right motor to pin 3
-    left_prop.attach(5);  //attatch the left motor to pin 5
-	
-	// motors
-	pinMode(STBY, OUTPUT);
+    Serial.println(F("Configuring pins for motors..."));
+    // motors
+    pinMode(STBY, OUTPUT);
 
-	pinMode(PWMA, OUTPUT);
-	pinMode(AIN1, OUTPUT);
-	pinMode(AIN2, OUTPUT);
+    pinMode(PWMA, OUTPUT);
+    pinMode(AIN1, OUTPUT);
+    pinMode(AIN2, OUTPUT);
 
-	pinMode(PWMB, OUTPUT);
-	pinMode(BIN1, OUTPUT);
-	pinMode(BIN2, OUTPUT);
+    pinMode(PWMB, OUTPUT);
+    pinMode(BIN1, OUTPUT);
+    pinMode(BIN2, OUTPUT);
 
-    // configure LED for output
-    pinMode(LED_BUILTIN,OUTPUT);
+    Serial.println(F("Running motors test..."));
+
+    digitalWrite(STBY, HIGH);
+    digitalWrite(AIN1, HIGH);
+    digitalWrite(AIN2, LOW);
+    analogWrite(PWMA, 100);
+    digitalWrite(BIN1, HIGH);
+    digitalWrite(BIN2, LOW);
+    analogWrite(PWMB, 100);
+    delay(1000);
+    digitalWrite(STBY, LOW);
+
+    Serial.println(F("Test finished"));
+
+    led_blink(1, 1000, 0);
 }
 
-void loop() {
+void loop()
+{
 
     // if programming failed, don't try to do anything
-    if (!dmpReady) return;
+    if (!dmpReady)
+        return;
 
     // wait for MPU interrupt or extra packet(s) available
-    while (!mpuInterrupt && fifoCount < packetSize) {
-        if (mpuInterrupt && fifoCount < packetSize) {
-          // try to get out of the infinite loop 
-          fifoCount = mpu.getFIFOCount();
-        }  
+    while (!mpuInterrupt && fifoCount < packetSize)
+    {
+        if (mpuInterrupt && fifoCount < packetSize)
+        {
+            // try to get out of the infinite loop
+            fifoCount = mpu.getFIFOCount();
+        }
         // other program behavior stuff here
         // .
         // .
@@ -287,125 +390,101 @@ void loop() {
     fifoCount = mpu.getFIFOCount();
 
     // check for overflow (this should never happen unless our code is too inefficient)
-    if ((mpuIntStatus & _BV(MPU6050_INTERRUPT_FIFO_OFLOW_BIT)) || fifoCount >= 1024) {
+    if ((mpuIntStatus & _BV(MPU6050_INTERRUPT_FIFO_OFLOW_BIT)) || fifoCount >= 1024)
+    {
         // reset so we can continue cleanly
         mpu.resetFIFO();
         fifoCount = mpu.getFIFOCount();
         Serial.println(F("FIFO overflow!"));
 
-    // otherwise, check for DMP data ready interrupt (this should happen frequently)
-    } 
-    else if (mpuIntStatus & _BV(MPU6050_INTERRUPT_DMP_INT_BIT)) {
+        // otherwise, check for DMP data ready interrupt (this should happen frequently)
+    }
+    else if (mpuIntStatus & _BV(MPU6050_INTERRUPT_DMP_INT_BIT))
+    {
         // wait for correct available data length, should be a VERY short wait
-        while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
+        while (fifoCount < packetSize)
+            fifoCount = mpu.getFIFOCount();
 
         // read a packet from FIFO
         mpu.getFIFOBytes(fifoBuffer, packetSize);
-        
+
         // track FIFO count here in case there is > 1 packet available
         // (this lets us immediately read more without waiting for an interrupt)
         fifoCount -= packetSize;
 
-        #ifdef OUTPUT_READABLE_YAWPITCHROLL
-            // display Euler angles in degrees
-            mpu.dmpGetQuaternion(&q, fifoBuffer);
-            mpu.dmpGetGravity(&gravity, &q);
-            mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-            Serial.print("ypr\t");
-            Serial.print(ypr[0] * 180/M_PI);
-            Serial.print("\t");
-            Serial.print(ypr[1] * 180/M_PI);
-            Serial.print("\t");
-            Serial.print(ypr[2] * 180/M_PI);
-            Serial.print("\t");
-            Serial.println("endl");
-        #endif
+        // getting data from DMP
+        mpu.dmpGetQuaternion(&q, fifoBuffer);
+        mpu.dmpGetGravity(&gravity, &q);
+        mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
 
         // blink LED to indicate activity
         blinkState = !blinkState;
         digitalWrite(LED_PIN, blinkState);
 
         // calculate pid
-        timePrev = time;  // the previous time is stored before the actual time read
-        time = millis();  // actual time read
+        timePrev = time; // the previous time is stored before the actual time read
+        time = millis(); // actual time read
         elapsedTime = (time - timePrev) / 1000;
 
-        error = ypr[1] - desired_angle;
-        
-        pid_p = kp*error;
-        if(-3 <error <3) { pid_i = pid_i+(ki*error); }
-        pid_d = kd*((error - previous_error)/elapsedTime);
-        
-        PID = pid_p + pid_i + pid_d;
-        
-        if(PID < -1000)
+        if (abs(ypr[2]) < 55.0)
         {
-          PID=-1000;
-        }
-        if(PID > 1000)
-        {
-          PID=1000;
-        }
-        
-        pwmLeft = throttle + PID;
-        pwmRight = throttle - PID;
+            error = ypr[2] - desired_angle;
+            pid_p = kp * error;
+            if (-3.0 < error && error < 3.0)
+            {
+                pid_i = pid_i + (ki * error);
+            }
+            pid_d = kd * ((error - previous_error) / elapsedTime);
 
-        //Right
-        if(pwmRight < 1000)
-        {
-          pwmRight= 1000;
+            PIDvalue = pid_p + pid_i + pid_d;
+
+            if (PIDvalue < -255)
+            {
+                PIDvalue = -255;
+            }
+            if (PIDvalue > 255)
+            {
+                PIDvalue = 255;
+            }
+
+            move(1, PIDvalue);
+            move(2, PIDvalue);
         }
-        if(pwmRight > 2000)
+        else
         {
-          pwmRight=2000;
-        }
-        //Left
-        if(pwmLeft < 1000)
-        {
-          pwmLeft= 1000;
-        }
-        if(pwmLeft > 2000)
-        {
-          pwmLeft=2000;
+            stop();
         }
 
+        // if (Serial1.available())
+        // {
+        //     bt = Serial1.readString();
+        //     char type = bt[0];
+        //     String b = bt.substring(2);
+        //     if (type == 'p')
+        //         kp = b.toFloat();
+        //     if (type == 'i')
+        //         ki = b.toFloat();
+        //     if (type == 'd')
+        //         kd = b.toFloat();
+        // }
 
-		// TODO
-		// convert pid to motor values
-        left_prop.writeMicroseconds(pwmLeft);
-        right_prop.writeMicroseconds(pwmRight);
+        // Serial1.print("ypr\t");
+        // Serial1.print(ypr[0] * 180 / 3.14);
+        // Serial1.print("\t");
+        // Serial1.print(ypr[1] * 180 / 3.14);
+        // Serial1.print("\t");
+        // Serial1.print(ypr[2] * 180 / 3.14);
+        // Serial1.print("\t");
+        // Serial1.print(kp);
+        // Serial1.print("\t");
+        // Serial1.print(ki);
+        // Serial1.print("\t");
+        // Serial1.print(kd);
+        // Serial1.print("\t");
+        // Serial1.print(F("PID "));
+        // Serial1.print(PIDvalue);
+        // Serial1.println(F(")"));
+
         previous_error = error; //Remember to store the previous error.
     }
-}
-
-void move(int motor, int speed, int direction){
-  //Move specific motor at speed and direction
-  //motor: 0 for B 1 for A
-  //speed: 0 is off, and 255 is full speed
-  //direction: 0 clockwise, 1 counter-clockwise
-  
-  digitalWrite(STBY, HIGH); //disable standby
-  
-  boolean inPin1 = LOW;
-  boolean inPin2 = HIGH;
-  
-  if(direction == 1){
-  inPin1 = HIGH;
-  inPin2 = LOW;
-  }
-  
-  if(motor == 1){
-  digitalWrite(AIN1, inPin1);
-  digitalWrite(AIN2, inPin2);
-  analogWrite(PWMA, speed);
-  }else{
-  digitalWrite(BIN1, inPin1);
-  digitalWrite(BIN2, inPin2);
-  analogWrite(PWMB, speed);
-  }
-}
-
-void stop(){
-  //enable standby
-  digitalWrite(STBY, LOW);
 }
