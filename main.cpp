@@ -141,11 +141,11 @@ float pid_d = 0;
 
 /////////////////PID CONSTANTS/////////////////
 double kp = 750.0;
-double ki = 0.1;
-double kd = 0.5;
+double ki = 0.5;
+double kd = 10.0;
 ///////////////////////////////////////////////
 
-float desired_angle = 0.007; //This is the angle in which we want the balance to stay steady
+float desired_angle = -0.0032; //This is the angle in which we want the balance to stay steady
 
 // ================================================================
 // ===               INTERRUPT DETECTION ROUTINE                ===
@@ -442,10 +442,11 @@ void loop()
 
         error = ypr[2] - desired_angle;
         pid_p = kp * error;
-        if (-3.0 < error && error < 3.0)
-        {
-            pid_i = pid_i + (ki * error);
-        }
+        // if (-3.0 < error && error < 3.0)
+        // {
+        //     pid_i = pid_i + (ki * error);
+        // }
+        pid_i = pid_i + (ki * error);
         pid_d = kd * ((error - previous_error) / elapsedTime);
 
         PIDvalue = pid_p + pid_i + pid_d;
