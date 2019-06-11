@@ -373,39 +373,39 @@ void loop()
         mpu.dmpGetQuaternion(&q, fifoBuffer);
         mpu.dmpGetGravity(&gravity, &q);
         mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-
-        // blink LED to indicate activity
-        blinkState = !blinkState;
-        digitalWrite(LED_PIN, blinkState);
-
-        // calculate pid
-        timePrev = time;
-        time = millis();
-        elapsedTime = (time - timePrev) / 1000;
-
-        error = ypr[2] - desired_angle;
-
-        pid_p = kp * error;
-        pid_i = pid_i + (ki * error);
-        pid_d = kd * ((error - previous_error) / elapsedTime);
-
-        PIDvalue = pid_p + pid_i + pid_d;
-
-        if (PIDvalue < -255)
-        {
-            PIDvalue = -255;
-            stop();
-        }
-        if (PIDvalue > 255)
-        {
-            PIDvalue = 255;
-            stop();
-        }
-
-        // move motors with calculated PID value
-        move(1, PIDvalue);
-        move(2, PIDvalue);
-
-        previous_error = error; //Remember to store the previous error.
     }
+
+    // blink LED to indicate activity
+    blinkState = !blinkState;
+    digitalWrite(LED_PIN, blinkState);
+
+    // calculate pid
+    timePrev = time;
+    time = millis();
+    elapsedTime = (time - timePrev) / 1000;
+
+    error = ypr[2] - desired_angle;
+
+    pid_p = kp * error;
+    pid_i = pid_i + (ki * error);
+    pid_d = kd * ((error - previous_error) / elapsedTime);
+
+    PIDvalue = pid_p + pid_i + pid_d;
+
+    if (PIDvalue < -255)
+    {
+        PIDvalue = -255;
+        stop();
+    }
+    if (PIDvalue > 255)
+    {
+        PIDvalue = 255;
+        stop();
+    }
+
+    // move motors with calculated PID value
+    move(1, PIDvalue);
+    move(2, PIDvalue);
+
+    previous_error = error; //Remember to store the previous error.
 }
